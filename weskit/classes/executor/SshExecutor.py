@@ -116,7 +116,7 @@ class SshExecutor(Executor):
                                      keepalive_count_max=self._keepalive_count_max,
                                      # By default do not forward the local environment.
                                      env={}, send_env={}))
-            logger.debug(f"Connected to {self._remote_name}")
+            logger.info(f"Connected to {self._remote_name}")
         except asyncssh.DisconnectError as e:
             raise ExecutorException("Connection error (disconnect)", e)
         except asyncio.TimeoutError as e:
@@ -240,7 +240,7 @@ class SshExecutor(Executor):
                 list(map(shlex.quote, command.command))
 
             final_command_str = " ".join(effective_command)
-            logger.debug(f"Executed command ({process_id}): {final_command_str}")
+            logger.info(f"Executed command ({process_id}): {final_command_str}")
             process: SSHClientProcess = await self._connection.\
                 create_process(command=final_command_str,
                                stdin=PIPE if stdin_file is None else stdin_file,

@@ -6,6 +6,7 @@
 #
 #  Authors: The WESkit Team
 
+import yaml
 import json
 import logging
 import os
@@ -14,7 +15,8 @@ from typing import List, Dict
 
 from weskit.classes.ShellCommand import ShellCommand
 from weskit.classes.executor.Executor import CommandResult
-from weskit.classes.executor.LocalExecutor import LocalExecutor
+from weskit.classes.executor.SshExecutor import SshExecutor
+from weskit.classes.executor.cluster.lsf.LsfExecutor import LsfExecutor
 from weskit.utils import get_current_timestamp, collect_relative_paths_from
 
 logger = logging.getLogger(__name__)
@@ -70,7 +72,9 @@ def run_command(command: List[str],
         stdout_file_abs = workdir_abs / stdout_file_rel
         log_dir_abs = workdir_abs / log_dir_rel
         os.makedirs(log_dir_abs)
-        executor = LocalExecutor()
+        with open(os.path.join("config", "lsf_remote.yaml"), "r") as f:
+            remote_config = yaml.safe_load(f)
+        executor = LsfExecutor(SshExecutor(**(remote_config['lsf_submission_host']['ssh'])))
         process = executor.execute(shell_command, stdout_file_abs, stderr_file_abs)
         result = executor.wait_for(process)
     finally:
