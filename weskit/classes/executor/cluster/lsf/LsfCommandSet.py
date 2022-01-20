@@ -101,7 +101,7 @@ class LsfCommandSet:
         """
         # Ensure the job exits, if the working directory does not exist.
         result = ["bsub"]
-        result += self._environment_parameters(command.environment)
+        #result += self._environment_parameters(command.environment)
         result += ["-cwd", str(command.workdir)] \
             if command.workdir is not None else []
         result += self._logging_parameters(stdout_file, stderr_file)
@@ -130,7 +130,9 @@ class LsfCommandSet:
                 if settings.cores is not None else []
 
         # We always use a single host.
-        result += ["-R", "span[hosts=1]"]
+        result += ["-R", "select[mem>1600] rusage[mem=1600] span[hosts=1]"]
+        result += ["-q", "oversubscribed"]
+        result += ["-M", "1600"]
 
         result += [" ".join(list(map(shlex.quote, command.command)))]
         return result
