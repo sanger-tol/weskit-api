@@ -17,6 +17,8 @@ from weskit.classes.ShellCommand import ShellCommand
 from weskit.classes.executor.Executor import CommandResult
 from weskit.classes.executor.SshExecutor import SshExecutor
 from weskit.classes.executor.cluster.lsf.LsfExecutor import LsfExecutor
+from weskit.classes.executor.Executor import ExecutionSettings
+from weskit.classes.executor.ExecutorException import ExecutorException
 from weskit.utils import get_current_timestamp, collect_relative_paths_from
 
 logger = logging.getLogger(__name__)
@@ -74,9 +76,14 @@ def run_command(command: List[str],
         os.makedirs(log_dir_abs)
         with open(os.path.join("config", "lsf_remote.yaml"), "r") as f:
             remote_config = yaml.safe_load(f)
-        executor = LsfExecutor(SshExecutor(**(remote_config['lsf_submission_host']['ssh'])))
-        process = executor.execute(shell_command, stdout_file_abs, stderr_file_abs)
-        result = executor.wait_for(process)
+        if remote_config is not None and "lsf_submission_host" in remote_config.keys():
+            settings = ExecutionSettings(queue=remote_config['lsf_submission_host']['bsub_params']['queue'],
+                                         total_memory=remote_config['lsf_submission_host']['bsub_params']['total_memory'])
+            executor = LsfExecutor(SshExecutor(**(remote_config['lsf_submission_host']['ssh'])))
+            process = executor.execute(shell_command, stdout_file_abs, stderr_file_abs, settings=settings)
+            result = executor.wait_for(process)
+        else:
+            raise ExecutorException("Invalid format found in lsf_remote.yaml")
     finally:
         # Collect files, but ignore those, that are in the .weskit/ directory. They are tracked by
         # the fields in the execution log (or that of previous runs in this directory).

@@ -104,7 +104,7 @@ class LsfExecutor(Executor):
         # The actual submission via `bsub` or similar is done quickly. We wait here for the
         # result and then use the cluster job ID returned from the submission command, as process
         # ID to query the cluster job status later.
-        logger.info(f'settings file or value :{settings}')
+
         with execute(self._executor, submission_command) as (result, stdout, stderr):
             stdout_lines = stdout.readlines()
             stderr_lines = stderr.readlines()

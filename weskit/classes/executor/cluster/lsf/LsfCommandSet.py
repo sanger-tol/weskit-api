@@ -5,6 +5,7 @@
 #      https://gitlab.com/one-touch-pipeline/weskit/api/-/blob/master/LICENSE
 #
 #  Authors: The WESkit Team
+import logging
 import shlex
 from os import PathLike
 from typing import List, Optional, Dict
@@ -16,7 +17,7 @@ from weskit.memory_units import Unit, Memory
 from weskit.classes.ShellCommand import ShellCommand
 from weskit.classes.executor.Executor import ExecutionSettings
 
-
+logger = logging.getLogger(__name__)
 class LsfCommandSet:
 
     def _environment_parameters(self, environment: Dict[str, str]) -> List[str]:
@@ -31,7 +32,7 @@ class LsfCommandSet:
                 # tell what to do, if the value contains both a command and an apostrophe :-(
                 return f"'{variable_value}'"
             else:
-                return variable_value
+                return variable_value if variable_value !="" else None
 
         # We want jobs to exit, if the chosen remote workdir does not exist. No explicit "none"
         # is necessary because it is implicit, if there is at least as single variable set.
@@ -101,7 +102,7 @@ class LsfCommandSet:
         """
         # Ensure the job exits, if the working directory does not exist.
         result = ["bsub"]
-        #result += self._environment_parameters(command.environment)
+        result += self._environment_parameters(command.environment)
         result += ["-cwd", str(command.workdir)] \
             if command.workdir is not None else []
         result += self._logging_parameters(stdout_file, stderr_file)
@@ -113,9 +114,9 @@ class LsfCommandSet:
                 if settings.accounting_name is not None else []
 
             result += [
-                "-M", self._memory_string(settings.total_memory),
-                "-R", f"rusage[mem={self._memory_string(settings.total_memory)}]"] \
-                if settings.total_memory is not None else []
+                "-M", f"{settings.total_memory}",
+                "-R", f"select[mem>{settings.total_memory}] rusage[mem={settings.total_memory}] span[hosts=1]"] \
+                if settings.total_memory is not None else ["-R", "span[hosts=1]"]
 
             result += ["-W", self._walltime_string(settings.walltime)] \
                 if settings.walltime is not None else []
@@ -129,10 +130,6 @@ class LsfCommandSet:
             result += ["-c", str(settings.cores)] \
                 if settings.cores is not None else []
 
-        # We always use a single host.
-        result += ["-R", "select[mem>1600] rusage[mem=1600] span[hosts=1]"]
-        result += ["-q", "oversubscribed"]
-        result += ["-M", "1600"]
 
         result += [" ".join(list(map(shlex.quote, command.command)))]
         return result
