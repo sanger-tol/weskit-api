@@ -179,6 +179,7 @@ class ExecutionSettings:
     All information is optional and it is the responsibility of the Executor to decide, which of
     the information to use, or what to do if information is missing.
     """
+    shared_workdir: str
     job_name: Optional[str] = None
     accounting_name: Optional[str] = None
     group: Optional[str] = None

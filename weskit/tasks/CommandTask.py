@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 def run_command(command: List[str],
                 base_workdir: str,
                 sub_workdir: str,
+                lsf_config: Dict,
+                workflow_path: str,
                 environment: Dict[str, str] = None,
                 log_base: str = ".weskit"):
     """
@@ -48,17 +50,21 @@ def run_command(command: List[str],
     Note: The interface is not based on ShellCommand because that would have required a means of
           (de)serializing ShellCommand for transfer from the REST-server to the Celery worker.
     """
+    shared_workdir = lsf_config["lsf_submission_host"]["bsub_params"]["shared_workdir"]
     if environment is None:
         environment = {}
     base_workdir_path = Path(base_workdir)
     sub_workdir_path = Path(sub_workdir)
     log_base_path = Path(log_base)
+    remote_base_workdir_path = Path(shared_workdir)
+    remote_sub_workdir_path = Path(workflow_path)
 
     workdir_abs = base_workdir_path / sub_workdir_path
+    remote_workdir_abs = remote_base_workdir_path / remote_sub_workdir_path.parent
     logger.info("Running command in {}: {}".format(workdir_abs, command))
 
     shell_command = ShellCommand(command=command,
-                                 workdir=workdir_abs,
+                                 workdir=remote_workdir_abs,
                                  # Let this explicitly inherit the task environment for the moment,
                                  # e.g. for conda.
                                  environment={**dict(os.environ), **environment})
@@ -68,19 +74,21 @@ def run_command(command: List[str],
     stdout_file_rel = log_dir_rel / "stdout"
     execution_log_rel = log_dir_rel / "log.json"
 
+    remote_log_dir_rel = log_base_path / start_time
+    remote_stderr_file_rel = remote_log_dir_rel / "stderr"
+    remote_stdout_file_rel = remote_log_dir_rel / "stdout"
+    remote_execution_log_rel = remote_log_dir_rel / "log.json"
+
     result: CommandResult
     try:
-        stderr_file_abs = workdir_abs / stderr_file_rel
-        stdout_file_abs = workdir_abs / stdout_file_rel
-        log_dir_abs = workdir_abs / log_dir_rel
-        os.makedirs(log_dir_abs)
-        with open(os.path.join("config", "lsf_remote.yaml"), "r") as f:
-            remote_config = yaml.safe_load(f)
-        if remote_config is not None and "lsf_submission_host" in remote_config.keys():
-            settings = ExecutionSettings(queue=remote_config['lsf_submission_host']['bsub_params']['queue'],
-                                         total_memory=remote_config['lsf_submission_host']['bsub_params']['total_memory'])
-            executor = LsfExecutor(SshExecutor(**(remote_config['lsf_submission_host']['ssh'])))
-            process = executor.execute(shell_command, stdout_file_abs, stderr_file_abs, settings=settings)
+        remote_stderr_file_abs = remote_workdir_abs / remote_stderr_file_rel
+        remote_stdout_file_abs = remote_workdir_abs / remote_stdout_file_rel
+        remote_log_dir_abs = remote_workdir_abs / remote_log_dir_rel
+        # os.makedirs(remote_log_dir_abs) #TODO: implement remove file creation
+        if lsf_config is not None and "lsf_submission_host" in lsf_config.keys():
+            settings = ExecutionSettings(**(lsf_config['lsf_submission_host']['bsub_params']))
+            executor = LsfExecutor(SshExecutor(**(lsf_config['lsf_submission_host']['ssh'])))
+            process = executor.execute(shell_command, remote_stdout_file_abs, remote_stderr_file_abs, settings=settings)
             result = executor.wait_for(process)
         else:
             raise ExecutorException("Invalid format found in lsf_remote.yaml")
@@ -101,17 +109,18 @@ def run_command(command: List[str],
             "start_time": start_time,
             "cmd": command,
             "env": environment,
-            "workdir": str(sub_workdir_path),
+            "workdir": str(remote_workdir_abs),
             "end_time": get_current_timestamp(),
             "exit_code": exit_code,
-            "stdout_file": str(stdout_file_rel),
-            "stderr_file": str(stderr_file_rel),
-            "log_dir": str(log_dir_rel),
-            "log_file": str(execution_log_rel),
+            "stdout_file": str(remote_stdout_file_rel),
+            "stderr_file": str(remote_stderr_file_rel),
+            "log_dir": str(remote_log_dir_rel),
+            "log_file": str(remote_execution_log_rel),
             "output_files": outputs
         }
-        execution_log_abs = workdir_abs / execution_log_rel
-        with open(execution_log_abs, "w") as fh:
-            json.dump(execution_log, fh)
+        # TODO: To implement
+        # execution_log_abs = workdir_abs / execution_log_rel
+        # with open(execution_log_abs, "w") as fh:
+        #     json.dump(execution_log, fh)
 
     return execution_log

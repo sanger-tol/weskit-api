@@ -104,6 +104,14 @@ def create_app(celery: Celery,
 
     weskit_data = os.getenv("WESKIT_DATA", "./tmp")
 
+
+    with open(os.path.join("config", "lsf_remote.yaml"), "r") as f:
+        remote_config = yaml.safe_load(f)
+
+    if remote_config is not None and "lsf_submission_host" in remote_config.keys():
+        # TODO: add method to validate the lsf_remote.yaml file
+        lsf_config = remote_config
+
     request_validation_config = \
         os.path.join("config", "request-validation.yaml")
 
@@ -143,7 +151,8 @@ def create_app(celery: Celery,
                                       ["default_workflow_engine_parameters"]),
                 workflows_base_dir=workflows_base_dir,
                 data_dir=weskit_data,
-                require_workdir_tag=config["require_workdir_tag"])
+                require_workdir_tag=config["require_workdir_tag"],
+                remote_config=lsf_config)
 
     service_info = ServiceInfo(config["static_service_info"],
                                read_swagger(),

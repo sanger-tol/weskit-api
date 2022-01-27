@@ -18,6 +18,8 @@ from weskit.classes.ShellCommand import ShellCommand
 from weskit.classes.executor.Executor import ExecutionSettings
 
 logger = logging.getLogger(__name__)
+
+
 class LsfCommandSet:
 
     def _environment_parameters(self, environment: Dict[str, str]) -> List[str]:
@@ -32,7 +34,7 @@ class LsfCommandSet:
                 # tell what to do, if the value contains both a command and an apostrophe :-(
                 return f"'{variable_value}'"
             else:
-                return variable_value if variable_value !="" else None
+                return variable_value if variable_value != "" else None
 
         # We want jobs to exit, if the chosen remote workdir does not exist. No explicit "none"
         # is necessary because it is implicit, if there is at least as single variable set.
@@ -46,7 +48,7 @@ class LsfCommandSet:
 
     def _logging_parameters(self,
                             stdout_file: Optional[PathLike] = None,
-                            stderr_file: Optional[PathLike] = None)\
+                            stderr_file: Optional[PathLike] = None) \
             -> List[str]:
         """
         Write output to separate or identical stdout and stderr files, but do not try to send an
@@ -102,9 +104,8 @@ class LsfCommandSet:
         """
         # Ensure the job exits, if the working directory does not exist.
         result = ["bsub"]
-        result += self._environment_parameters(command.environment)
-        result += ["-cwd", str(command.workdir)] \
-            if command.workdir is not None else []
+        #result += self._environment_parameters(command.environment)
+        result += ["-cwd", str(settings.shared_workdir)]
         result += self._logging_parameters(stdout_file, stderr_file)
 
         if settings is not None:
@@ -129,7 +130,6 @@ class LsfCommandSet:
 
             result += ["-c", str(settings.cores)] \
                 if settings.cores is not None else []
-
 
         result += [" ".join(list(map(shlex.quote, command.command)))]
         return result
