@@ -105,7 +105,8 @@ class LsfCommandSet:
         # Ensure the job exits, if the working directory does not exist.
         result = ["bsub"]
         #result += self._environment_parameters(command.environment)
-        result += ["-cwd", str(settings.shared_workdir)]
+        result += ["-cwd", str(command.workdir)] \
+            if command.workdir is not None else []
         result += self._logging_parameters(stdout_file, stderr_file)
 
         if settings is not None:

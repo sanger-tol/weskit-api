@@ -75,8 +75,8 @@ def run_command(command: List[str],
     execution_log_rel = log_dir_rel / "log.json"
 
     remote_log_dir_rel = log_base_path / start_time
-    remote_stderr_file_rel = remote_log_dir_rel / "stderr"
-    remote_stdout_file_rel = remote_log_dir_rel / "stdout"
+    remote_stderr_file_rel = f"{start_time}_%J_stderr"
+    remote_stdout_file_rel = f"{start_time}_%J_stdout"
     remote_execution_log_rel = remote_log_dir_rel / "log.json"
 
     result: CommandResult
