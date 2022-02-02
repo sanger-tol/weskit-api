@@ -281,7 +281,6 @@ class Manager:
             run_dir_abs = os.path.abspath(os.path.join(self.data_dir, run.dir))
             if not os.path.exists(run_dir_abs):
                 os.makedirs(run_dir_abs, exist_ok=True)
-            # TODO: Rewrite the current implementation of saving the config.yaml on the host/local machine
             with open(run_dir_abs + "/config.yaml", "w") as ff:
                 yaml.dump(run.request["workflow_params"], ff)
 
@@ -352,7 +351,8 @@ class Manager:
                     "base_workdir": self.data_dir,
                     "sub_workdir": run.dir,
                     "lsf_config": self.remote_config,
-                    "workflow_path": run.workflow_path
+                    "workflow_path": run.workflow_path,
+                    "request_config_params_path": os.path.abspath(os.path.join(self.data_dir, run.dir)) + "/config.yaml"
                 })
             run.celery_task_id = task.id
 

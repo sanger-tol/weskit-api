@@ -12,6 +12,7 @@ import logging
 import os
 from pathlib import Path
 from typing import List, Dict
+from asyncssh import SFTPError
 
 from weskit.classes.ShellCommand import ShellCommand
 from weskit.classes.executor.Executor import CommandResult
@@ -29,6 +30,7 @@ def run_command(command: List[str],
                 sub_workdir: str,
                 lsf_config: Dict,
                 workflow_path: str,
+                request_config_params_path: str,
                 environment: Dict[str, str] = None,
                 log_base: str = ".weskit"):
     """
@@ -61,7 +63,7 @@ def run_command(command: List[str],
 
     workdir_abs = base_workdir_path / sub_workdir_path
     remote_workdir_abs = remote_base_workdir_path / remote_sub_workdir_path.parent
-    logger.info("Running command in {}: {}".format(workdir_abs, command))
+    logger.info("Running command in {}: {}".format(remote_workdir_abs, command))
 
     shell_command = ShellCommand(command=command,
                                  workdir=remote_workdir_abs,
@@ -70,28 +72,34 @@ def run_command(command: List[str],
                                  environment={**dict(os.environ), **environment})
     start_time = get_current_timestamp()
     log_dir_rel = log_base_path / start_time
-    stderr_file_rel = log_dir_rel / "stderr"
-    stdout_file_rel = log_dir_rel / "stdout"
-    execution_log_rel = log_dir_rel / "log.json"
+    stderr_file_rel = f"{start_time}_stderr"
+    stdout_file_rel = f"{start_time}_stdout"
+    execution_log_rel = f"{start_time}_log.json"
 
     remote_log_dir_rel = log_base_path / start_time
-    remote_stderr_file_rel = f"{start_time}_%J_stderr"
-    remote_stdout_file_rel = f"{start_time}_%J_stdout"
-    remote_execution_log_rel = remote_log_dir_rel / "log.json"
+    remote_stderr_file_rel = f"{start_time}_stderr"
+    remote_stdout_file_rel = f"{start_time}_stdout"
+    remote_execution_log_rel = f"{start_time}_log.json"
 
     result: CommandResult
     try:
+        stderr_file_abs = workdir_abs / stderr_file_rel
+        stdout_file_abs = workdir_abs / stdout_file_rel
         remote_stderr_file_abs = remote_workdir_abs / remote_stderr_file_rel
         remote_stdout_file_abs = remote_workdir_abs / remote_stdout_file_rel
         remote_log_dir_abs = remote_workdir_abs / remote_log_dir_rel
-        # os.makedirs(remote_log_dir_abs) #TODO: implement remove file creation
-        if lsf_config is not None and "lsf_submission_host" in lsf_config.keys():
-            settings = ExecutionSettings(**(lsf_config['lsf_submission_host']['bsub_params']))
-            executor = LsfExecutor(SshExecutor(**(lsf_config['lsf_submission_host']['ssh'])))
-            process = executor.execute(shell_command, remote_stdout_file_abs, remote_stderr_file_abs, settings=settings)
-            result = executor.wait_for(process)
-        else:
-            raise ExecutorException("Invalid format found in lsf_remote.yaml")
+        # os.makedirs(log_dir_abs) #TODO: implement remove file creation
+        settings = ExecutionSettings(**(lsf_config['lsf_submission_host']['bsub_params']))
+        executor = LsfExecutor(SshExecutor(**(lsf_config['lsf_submission_host']['ssh'])))
+        logger.info(f"Copying the config.yaml ({request_config_params_path}) file to path : {remote_workdir_abs}")
+        _copy_remote_file(request_config_params_path, remote_workdir_abs, executor.executor, "put")
+        process = executor.execute(shell_command, remote_stdout_file_abs, remote_stderr_file_abs, settings=settings)
+        result = executor.wait_for(process)
+        logger.info("Copying log files to local directory")
+        logger.info(f"remote_stdout_file_abs : {remote_stdout_file_abs} to stdout :{stdout_file_abs}")
+        _copy_remote_file(remote_stdout_file_abs, stdout_file_abs, executor.executor, "get")
+        logger.info(f"remote_stderr_file_abs : {remote_stderr_file_abs} to stderr :{stderr_file_abs}")
+        _copy_remote_file(remote_stderr_file_abs, stderr_file_abs, executor.executor, "get")
     finally:
         # Collect files, but ignore those, that are in the .weskit/ directory. They are tracked by
         # the fields in the execution log (or that of previous runs in this directory).
@@ -109,18 +117,38 @@ def run_command(command: List[str],
             "start_time": start_time,
             "cmd": command,
             "env": environment,
-            "workdir": str(remote_workdir_abs),
+            "remote_workdir": str(remote_workdir_abs),
+            "workdir": str(workdir_abs),
             "end_time": get_current_timestamp(),
             "exit_code": exit_code,
-            "stdout_file": str(remote_stdout_file_rel),
-            "stderr_file": str(remote_stderr_file_rel),
+            "remote_stdout_file": str(remote_stdout_file_rel),
+            "remote_stderr_file": str(remote_stderr_file_rel),
+            "stdout_file": str(stdout_file_rel),
+            "stderr_file": str(stderr_file_rel),
             "log_dir": str(remote_log_dir_rel),
             "log_file": str(remote_execution_log_rel),
             "output_files": outputs
         }
-        # TODO: To implement
-        # execution_log_abs = workdir_abs / execution_log_rel
-        # with open(execution_log_abs, "w") as fh:
-        #     json.dump(execution_log, fh)
+
+        execution_log_abs = workdir_abs / execution_log_rel
+        with open(execution_log_abs, "w") as fh:
+            json.dump(execution_log, fh)
+        remote_execution_log_abs = remote_workdir_abs / remote_execution_log_rel
+        _copy_remote_file(execution_log_abs, remote_execution_log_abs, executor.executor, "put")
+        logger.info(f" Copying execution_log: {execution_log} to {remote_execution_log_abs}")
 
     return execution_log
+
+
+def _copy_remote_file(src_path, dst_path, executor, action):
+    """
+        TODO: Add method description
+    """
+    try:
+        logger.info(f" Reading remote file from path : {src_path}")
+        executor.event_loop.run_until_complete(getattr(executor, action)(srcpath=src_path, dstpath=dst_path))
+        logger.info(f" Created to local file path : {dst_path}")
+    except (SFTPError, OSError, ValueError) as e:
+        logger.error(f"Attempt to copy remote file failed for file: {src_path}")
+        logger.error(e, exc_info=True)
+        raise FileNotFoundError

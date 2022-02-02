@@ -104,13 +104,24 @@ def create_app(celery: Celery,
 
     weskit_data = os.getenv("WESKIT_DATA", "./tmp")
 
+    remote_config_path = os.getenv("LSF_CONFIG", "")
 
-    with open(os.path.join("config", "lsf_remote.yaml"), "r") as f:
-        remote_config = yaml.safe_load(f)
+    with open(remote_config_path, "r") as yaml_file:
+        lsf_config = yaml.safe_load(yaml_file)
 
-    if remote_config is not None and "lsf_submission_host" in remote_config.keys():
-        # TODO: add method to validate the lsf_remote.yaml file
-        lsf_config = remote_config
+    remote_validation_config = \
+        os.path.join("config", "remote-config-validation.yaml")
+
+    with open(remote_validation_config, "r") as yaml_file:
+        remote_config = yaml.safe_load(yaml_file)
+        logger.info("Read remote validation config from " + remote_validation_config)
+
+    # Validate remote configuration YAML.
+    config_errors = create_validator(remote_config)(lsf_config)
+    if config_errors:
+        logger.error("Could not validate config.yaml: {}".
+                     format(config_errors))
+        sys.exit(ErrorCodes.CONFIGURATION_ERROR)
 
     request_validation_config = \
         os.path.join("config", "request-validation.yaml")

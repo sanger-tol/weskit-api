@@ -94,6 +94,10 @@ class SshExecutor(Executor):
     def keyfile(self) -> PathLike:
         return self._keyfile
 
+    @property
+    def event_loop(self) -> asyncio.get_event_loop:
+        return self._event_loop
+
     def _connect(self):
         # Some related docs:
         # * https://asyncssh.readthedocs.io/en/latest/api.html#specifying-known-hosts
