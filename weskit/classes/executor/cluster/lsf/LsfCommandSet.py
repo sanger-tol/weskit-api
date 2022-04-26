@@ -32,11 +32,11 @@ class LsfCommandSet(CommandSet):
 
         # We want jobs to exit, if the chosen remote workdir does not exist. No explicit "none"
         # is necessary because it is implicit, if there is at least as single variable set.
-        environment_string = "LSB_EXIT_IF_CWD_NOTEXIST=Y"
+        environment_string = "all,LSB_EXIT_IF_CWD_NOTEXIST=Y"
         if len(environment) > 0:
             # Note: The space after the comma is needed.
             environment_string += ", " + ", ".join(
-                [f"{it[0]}={quote(it[1])}" for it in environment.items()]
+                [f"{it[0]}={it[1]}" for it in environment.items()]
             )
         return ["-env", environment_string]
 
@@ -110,9 +110,9 @@ class LsfCommandSet(CommandSet):
                 if settings.accounting_name is not None else []
 
             result += [
-                "-M", self._memory_string(settings.total_memory),
-                "-R", f"rusage[mem={self._memory_string(settings.total_memory)}]"] \
-                if settings.total_memory is not None else []
+                "-M", f"{settings.total_memory}",
+                "-R", f"select[mem>{settings.total_memory}] rusage[mem={settings.total_memory}] span[hosts=1]"] \
+                if settings.total_memory is not None else ["-R", "span[hosts=1]"]
 
             result += ["-W", self._walltime_string(settings.walltime)] \
                 if settings.walltime is not None else []
@@ -126,8 +126,8 @@ class LsfCommandSet(CommandSet):
             result += ["-c", str(settings.cores)] \
                 if settings.cores is not None else []
 
-        # We always use a single host.
-        result += ["-R", "span[hosts=1]"]
+        # # We always use a single host.
+        # result += ["-R", "span[hosts=1]"]
 
         result += [" ".join(list(map(shlex.quote, command.command)))]
         return result

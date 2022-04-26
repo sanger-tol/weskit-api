@@ -153,6 +153,9 @@ def test_create_nextflow():
          {"name": "trace", "value": "TRUE", "api": True},
          {"name": "report", "value": "T", "api": True},
          {"name": "graph", "value": "Y", "api": True},
+         {"name": "r", "value": None, "api": True},
+         {"name": "c", "value": None, "api": True},
+         {"name": "profile", "value": None, "api": True},
          {"name": "timeline", "value": "True", "api": True}]
     )
     assert engine.default_params == [
@@ -160,6 +163,9 @@ def test_create_nextflow():
         ActualEngineParameter(EngineParameter({"trace"}), "TRUE", True),
         ActualEngineParameter(EngineParameter({"report"}), "T", True),
         ActualEngineParameter(EngineParameter({"graph"}), "Y", True),
+        ActualEngineParameter(EngineParameter({"r"}), None, True),
+        ActualEngineParameter(EngineParameter({'c'}), None),
+        ActualEngineParameter(EngineParameter({'profile'}), None),
         ActualEngineParameter(EngineParameter({"timeline"}), "True", True)
     ]
     assert engine.name() == "NFL"
@@ -167,14 +173,14 @@ def test_create_nextflow():
     created1 = engine.command(Path("/some/path"),
                               Path("/some/workdir"),
                               [Path("/some/config.yaml")],
-                              {})
+                              {"profile" : "sanger"})
     assert created1.command == ['nextflow', "run", "/some/path",
                                 '-params-file', '/some/config.yaml',
                                 '-with-trace',
                                 '-with-report',
                                 '-with-dag',
                                 '-with-timeline']
-    assert created1.environment == {"NXF_OPTS": "-Xmx2048m"}
+    assert created1.environment == {"NXF_ASSETS": "/some/workdir","NXF_OPTS": "-Xmx2048m"}
     assert created1.workdir == Path("/some/workdir")
 
     # Note that different variants of `False` are used and correctly interpreted.
@@ -187,7 +193,7 @@ def test_create_nextflow():
                                "trace": "FALSE"})
     assert created2.command == ['nextflow', "run", "/some/path",
                                 '-params-file', '/the/config.file']
-    assert created2.environment == {"NXF_OPTS": "-Xmx2048m"}
+    assert created2.environment == {"NXF_ASSETS": "/a/workdir","NXF_OPTS": "-Xmx2048m"}
     assert created2.workdir == Path("/a/workdir")
 
     with pytest.raises(KeyError):

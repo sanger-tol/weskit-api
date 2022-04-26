@@ -14,7 +14,9 @@ from typing import List, Dict, Optional
 
 from weskit.classes.ShellCommand import ShellCommand
 from weskit.classes.executor.Executor import CommandResult
-from weskit.classes.executor.LocalExecutor import LocalExecutor
+from weskit.classes.executor.SshExecutor import SshExecutor
+from weskit.classes.executor.cluster.lsf.LsfExecutor import LsfExecutor
+from weskit.classes.executor.Executor import ExecutionSettings
 from weskit.utils import get_current_timestamp, collect_relative_paths_from
 
 logger = logging.getLogger(__name__)
@@ -23,8 +25,9 @@ logger = logging.getLogger(__name__)
 def run_command(command: List[str],
                 base_workdir: str,
                 sub_workdir: str,
+                remote_config: dict,
                 environment: Dict[str, str] = None,
-                log_base: str = ".weskit"):
+                log_base: str = "weskit"):
     """
     Run a command in a working directory. The workdir has to be an relative path, such that
     `base_workdir/sub_workdir` is the absolute path in which the command is executed. base_workdir
@@ -57,7 +60,7 @@ def run_command(command: List[str],
                                  workdir=workdir_abs,
                                  # Let this explicitly inherit the task environment for the moment,
                                  # e.g. for conda.
-                                 environment={**dict(os.environ), **environment})
+                                 environment={**environment})
     start_time = get_current_timestamp()
     log_dir_rel = log_base_path / start_time
     stderr_file_rel = log_dir_rel / "stderr"
@@ -70,8 +73,9 @@ def run_command(command: List[str],
         stdout_file_abs = workdir_abs / stdout_file_rel
         log_dir_abs = workdir_abs / log_dir_rel
         os.makedirs(log_dir_abs)
-        executor = LocalExecutor()
-        process = executor.execute(shell_command, stdout_file_abs, stderr_file_abs)
+        settings = ExecutionSettings(**(remote_config['lsf_submission_host']['bsub_params']))
+        executor = LsfExecutor(SshExecutor(**(remote_config['lsf_submission_host']['ssh'])))
+        process = executor.execute(shell_command, stdout_file_abs, stderr_file_abs, settings=settings)
         result = executor.wait_for(process)
     finally:
         # Collect files, but ignore those, that are in the .weskit/ directory. They are tracked by
@@ -91,13 +95,13 @@ def run_command(command: List[str],
             "start_time": start_time,
             "cmd": command,
             "env": environment,
-            "workdir": str(sub_workdir_path),
+            "workdir": str(base_workdir_path / sub_workdir_path),
             "end_time": get_current_timestamp(),
             "exit_code": exit_code,
-            "stdout_file": str(stdout_file_rel),
-            "stderr_file": str(stderr_file_rel),
-            "log_dir": str(log_dir_rel),
-            "log_file": str(execution_log_rel),
+            "stdout_file": str(base_workdir_path / sub_workdir_path / stdout_file_rel),
+            "stderr_file": str(base_workdir_path / sub_workdir_path /stderr_file_rel),
+            "log_dir": str(base_workdir_path / sub_workdir_path /log_dir_rel),
+            "log_file": str(base_workdir_path / sub_workdir_path /execution_log_rel),
             "output_files": outputs
         }
         execution_log_abs = workdir_abs / execution_log_rel

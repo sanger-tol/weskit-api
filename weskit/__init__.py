@@ -89,7 +89,12 @@ def create_app(celery: Celery,
         config_file = os.getenv("WESKIT_CONFIG", "")
     else:
         raise ValueError("Cannot start WESkit: Environment variable WESKIT_CONFIG is undefined")
-
+    if os.getenv("REMOTE_CONFIG") is not None:
+        remote_config_path = os.getenv("REMOTE_CONFIG", "")
+    else:
+        raise ValueError("Cannot start WESkit: Environment variable REMOTE_CONFIG is undefined")
+    if os.getenv("NFL_TMP") is None:
+        raise ValueError("Cannot start WESkit: Environment variable NFL_TMP is undefined")
     log_config_file = os.getenv(
         "WESKIT_LOG_CONFIG",
         os.path.join("config", "log-config.yaml"))
@@ -103,6 +108,9 @@ def create_app(celery: Celery,
         os.path.join(os.getcwd(), "workflows"))
 
     weskit_data = os.getenv("WESKIT_DATA", "./tmp")
+
+    remote_validation_config = \
+        os.path.join("config", "remote-config-validation.yaml")
 
     request_validation_config = \
         os.path.join("config", "request-validation.yaml")
@@ -124,6 +132,21 @@ def create_app(celery: Celery,
     with open(request_validation_config, "r") as yaml_file:
         request_validation = yaml.safe_load(yaml_file)
 
+    with open(remote_validation_config, "r") as yaml_file:
+        remote_config = yaml.safe_load(yaml_file)
+        logger.info("Read remote validation config from " + remote_validation_config)
+
+    with open(remote_config_path, "r") as yaml_file:
+        lsf_config = yaml.safe_load(yaml_file)
+        logger.info("Read remote config from " + remote_config_path)
+
+    # Validate remote configuration YAML.
+    validated_lsf_config = create_validator(remote_config)(lsf_config)
+    if isinstance(validated_lsf_config, list):
+        logger.error("Could not validate remote config.yaml: {}".
+                     format(validated_lsf_config))
+        sys.exit(ErrorCodes.CONFIGURATION_ERROR)
+
     # Validate configuration YAML.
     validation_result = create_validator(validation)(config)
     if isinstance(validation_result, list):
@@ -133,6 +156,17 @@ def create_app(celery: Celery,
     else:
         # The validation result contains the normalized config (with default values set).
         config = validation_result
+
+    secrets_path = "/home/weskit/secrets/tower_access_token.secret"
+    try:
+        with open(secrets_path) as f:
+            access_token = f.read()
+            # Saving NF Tower access token to env var 'TOWER_ACCESS_TOKEN'
+            os.environ["TOWER_ACCESS_TOKEN"] = str(access_token)
+    except Exception as e:
+        logger.error(f"Could not read access token from '{secrets_path}'")
+        logger.error(e)
+        sys.exit(ErrorCodes.CONFIGURATION_ERROR)
 
     # Insert the "celery" section from the configuration file into the Celery config.
     celery.conf.update(**config.get("celery", {}))
@@ -144,7 +178,8 @@ def create_app(celery: Celery,
                 create(config["static_service_info"]["default_workflow_engine_parameters"]),
                 workflows_base_dir=workflows_base_dir,
                 data_dir=weskit_data,
-                require_workdir_tag=config["require_workdir_tag"])
+                require_workdir_tag=config["require_workdir_tag"],
+                remote_config=validated_lsf_config)
 
     service_info = ServiceInfo(config["static_service_info"],
                                read_swagger(),

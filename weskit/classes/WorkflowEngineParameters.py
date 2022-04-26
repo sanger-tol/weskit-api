@@ -91,7 +91,13 @@ KNOWN_PARAMS = ParameterIndex([
     EngineParameter({"tempdir"}),
     EngineParameter({"graph"}),
     EngineParameter({"max-memory"}),
-    EngineParameter({"cores"})
+    EngineParameter({"cores"}),
+    EngineParameter({"r"}),
+    EngineParameter({"profile"}),
+    EngineParameter({"c"}),
+    EngineParameter({"w"}),
+    EngineParameter({"resume"}),
+    EngineParameter({"with-tower"}),
 ])
 
 

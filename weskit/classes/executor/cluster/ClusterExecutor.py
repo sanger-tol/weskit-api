@@ -7,6 +7,7 @@
 #  Authors: The WESkit Team
 import logging
 import re
+import asyncssh
 from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
 from datetime import datetime
@@ -15,7 +16,7 @@ from pathlib import PurePath
 from tempfile import NamedTemporaryFile
 from typing import Optional, List, Tuple, Iterator, IO, Match, cast
 
-from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception, retry_if_exception_type
 
 from weskit.classes.ShellCommand import ShellCommand
 from weskit.classes.executor.Executor import \
@@ -246,22 +247,33 @@ class ClusterExecutor(Executor):
             process.result.end_time = datetime.now()
         return process
 
+    @retry(wait=wait_exponential(multiplier=1, min=1, max=6),
+           stop=stop_after_attempt(5),
+           retry=retry_if_exception_type(asyncssh.ChannelOpenError))
     def wait_for(self, process: ExecutedProcess) -> CommandResult:
         if process.result.status.finished:
             return process.result
         wait_command = ShellCommand(self._command_set.wait_for(process.id.value))
-        with execute(self._executor, wait_command) as (result, stdout, stderr):
-            if result.status.code == 2:
-                error_message = stderr.readlines()
-                if error_message != \
-                        [f"done({process.id.value}): Wait condition is never satisfied\n"]:
+        try:
+            with execute(self._executor, wait_command) as (result, stdout, stderr):
+                if result.status.code == 2:
+                    error_message = stderr.readlines()
+                    if error_message != \
+                            [f"done({process.id.value}): Wait condition is never satisfied\n"]:
+                        raise ExecutorException(f"Wait failed: {str(result)}, " +
+                                                f"stderr={error_message}, " +
+                                                f"stdout={stdout.readlines()}")
+                elif result.status.failed:
                     raise ExecutorException(f"Wait failed: {str(result)}, " +
-                                            f"stderr={error_message}, " +
+                                            f"stderr={stdout.readlines()}, " +
                                             f"stdout={stdout.readlines()}")
-            elif result.status.failed:
-                raise ExecutorException(f"Wait failed: {str(result)}, " +
-                                        f"stderr={stdout.readlines()}, " +
-                                        f"stdout={stdout.readlines()}")
+        except asyncssh.Error as e:
+            logger.debug(e.reason)
+            if e.reason in ["SSH connection closed", "SSH connection lost"]:
+                logger.info("Reconnecting to the remote server")
+                # Creating a new connection
+                self._executor._connect()
+                raise asyncssh.ChannelOpenError(code=e.code, reason=e.reason)
         return self.update_process(process).result
 
     @abstractmethod
