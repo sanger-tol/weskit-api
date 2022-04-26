@@ -15,7 +15,6 @@ from datetime import timedelta, datetime
 from os import PathLike
 from pathlib import PurePath, Path
 from typing import Optional, cast
-
 import pytest
 import yaml
 from typing.io import IO
@@ -28,6 +27,7 @@ from weskit.classes.executor.LocalExecutor import LocalExecutor
 from weskit.classes.executor.SshExecutor import SshExecutor
 from weskit.classes.executor.cluster.lsf.LsfExecutor import LsfExecutor, execute
 from weskit.classes.executor.cluster.slurm.SlurmExecutor import SlurmExecutor
+
 from weskit.memory_units import Memory, Unit
 
 # Note that this cannot be solved by a fixture yielding multiple times.
@@ -63,6 +63,16 @@ if remote_config is not None and "lsf_submission_host" in remote_config.keys():
                                                pytest.mark.integration,
                                                pytest.mark.ssh_lsf])
 
+
+
+if remote_config is not None and "slurm_submission_host" in remote_config.keys():
+    ssh_slurm_executor = SlurmExecutor(SshExecutor(**(
+        remote_config['slurm_submission_host']['ssh'])))
+    shared_workdir = remote_config['slurm_submission_host']["shared_workdir"]
+    executors["ssh_slurm"] = pytest.param(ssh_slurm_executor,
+                                          marks=[pytest.mark.slow,
+                                                 pytest.mark.integration,
+                                                 pytest.mark.ssh_slurm])
 
 if remote_config is not None and "slurm_submission_host" in remote_config.keys():
     ssh_slurm_executor = SlurmExecutor(SshExecutor(**(
@@ -500,6 +510,54 @@ class MockExecutor(Executor):
 
 
 def test_executor_context_manager():
+    class MockExecutor(Executor):
+
+        def __init__(self, target_runstatus):
+            self.update_process_called_with = None
+            self.get_status_called_with = None
+            self.wait_for_called_with = None
+            self._target_runstatus = target_runstatus
+
+        def get_status(self, process: ExecutedProcess) -> RunStatus:
+            self.get_status_called_with = process
+            return process.result.status
+
+        def update_process(self, process: ExecutedProcess) -> ExecutedProcess:
+            return process
+
+        def kill(self, process: ExecutedProcess):
+            pass
+
+        def wait_for(self, process: ExecutedProcess) -> CommandResult:
+            self.wait_for_called_with = process
+            process.result.status = RunStatus(self._target_runstatus)
+            return process.result
+
+        def copy_file(self, source: PathLike, target: PathLike):
+            pass
+
+        def remove_file(self, file: PathLike):
+            pass
+
+        def execute(self, command: ShellCommand,
+                    stdout_file: Optional[FileRepr] = None,
+                    stderr_file: Optional[FileRepr] = None,
+                    stdin_file: Optional[FileRepr] = None,
+                    settings: Optional[ExecutionSettings] = None,
+                    **kwargs) -> ExecutedProcess:
+            with open(stdout_file, "w") as f:
+                print("stdout", file=f)
+            with open(stderr_file, "w") as f:
+                print("stderr", file=f)
+            return ExecutedProcess(process_handle=None,
+                                   executor=self,
+                                   pre_result=CommandResult(command=command,
+                                                            id=ProcessId(12234),
+                                                            run_status=RunStatus(),
+                                                            stderr_file=stderr_file,
+                                                            stdout_file=stdout_file,
+                                                            stdin_file=stdin_file,
+                                                            start_time=datetime.now()))
 
     command = ShellCommand(["echo", "something"])
     executor = MockExecutor(target_status=0)

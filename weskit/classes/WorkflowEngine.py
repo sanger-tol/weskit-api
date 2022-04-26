@@ -7,8 +7,8 @@
 #  Authors: The WESkit Team
 import math
 from abc import ABCMeta, abstractmethod
-from os import PathLike
-from pathlib import Path
+from os import PathLike, getenv
+from pathlib import Path, PurePath
 from typing import List, Dict, Optional
 
 from weskit.memory_units import Memory, Unit
@@ -75,6 +75,11 @@ class WorkflowEngine(metaclass=ABCMeta):
         if param.param == self.known_parameters()[name]:
             if param.value is None:
                 return []
+            elif isinstance(param.value, list):
+                result = []
+                for v in param.value:
+                    result.extend([argument, v])
+                return result
             else:
                 return [argument, str(param.value)]
         else:
@@ -90,7 +95,7 @@ class WorkflowEngine(metaclass=ABCMeta):
         result: Dict[EngineParameter, Optional[str]] = {}
         for name, value in run_params.items():
             parameter = self.known_parameters()[name]
-            result[parameter] = None if value is None else str(value)
+            result[parameter] = None if value is None else value
         return result
 
     def _effective_run_params(self, run_params: Dict[str, Optional[str]]) \
@@ -153,7 +158,10 @@ class Snakemake(WorkflowEngine):
         return KNOWN_PARAMS.subset(frozenset({"cores"}))
 
     def _environment(self, parameters: List[ActualEngineParameter]) -> Dict[str, str]:
-        return {}
+        result = {"SINGULARITYENV_PREPEND_PATH": "/software/treeoflife/miniconda3/envs/nf-core_dev/bin",
+                  "SINGULARITY_BIND": "/software",
+                  "SINGULARITYENV_JAVA_HOME": "/software/treeoflife/miniconda3/envs/nf-core_dev"}
+        return result
 
     def _command_params(self, parameters: List[ActualEngineParameter]) -> List[str]:
         result = []
@@ -165,7 +173,7 @@ class Snakemake(WorkflowEngine):
                 workflow_path: PathLike,
                 workdir: Optional[PathLike],
                 config_files: List[PathLike],
-                engine_params: Dict[str, Optional[str]])\
+                engine_params: Dict[str, Optional[str]]) \
             -> ShellCommand:
         parameters = self._effective_run_params(engine_params)
         command = ["snakemake",
@@ -195,6 +203,12 @@ class Nextflow(WorkflowEngine):
                                               "timeline",
                                               "graph",
                                               "max-memory",
+                                              "r",
+                                              "profile",
+                                              "c",
+                                              "w",
+                                              "resume",
+                                              "with-tower",
                                               "tempdir"}))
 
     def _environment(self, parameters: List[ActualEngineParameter]) -> Dict[str, str]:
@@ -227,13 +241,19 @@ class Nextflow(WorkflowEngine):
             result += self._optional_param(param, "report", "-with-report")
             result += self._optional_param(param, "timeline", "-with-timeline")
             result += self._optional_param(param, "graph", "-with-dag")
+            result += self._argument_param(param, "r", "-r")
+            result += self._argument_param(param, "c", "-c")
+            result += self._argument_param(param, "w", "-w")
+            result += self._argument_param(param, "profile", "-profile")
+            result += self._optional_param(param, "resume", "-resume")
+            result += self._argument_param(param, "with-tower", "-with-tower")
         return result
 
     def command(self,
                 workflow_path: PathLike,
                 workdir: Optional[PathLike],
                 config_files: List[PathLike],
-                engine_params: Dict[str, Optional[str]])\
+                engine_params: Dict[str, Optional[str]]) \
             -> ShellCommand:
         parameters = self._effective_run_params(engine_params)
         command = ["nextflow"] +\
@@ -244,6 +264,14 @@ class Nextflow(WorkflowEngine):
         else:
             raise ValueError("Nextflow accepts only a single parameters file (`-params-file`)")
         command += self._run_command_params(parameters)
+        environment_params = self._environment(parameters)
+        # As multiple Nextflow workflows will be accessing the $user/.nextflow/assets folder
+        # making NXF_ASSETS point to current workdir is safer to avoid GIT index errors.
+        environment_params["NXF_ASSETS"] = str(workdir)
+        environment_params["TOWER_ACCESS_TOKEN"] = getenv("TOWER_ACCESS_TOKEN")
+        run_dir = PurePath(workdir)
+        environment_params["NXF_WORK"] = str(Path(getenv("NFL_TMP")) / run_dir.parent.name
+                                             / run_dir.name / Path("work"))
         return ShellCommand(command=command,
                             workdir=None if workdir is None else Path(workdir),
-                            environment=self._environment(parameters))
+                            environment=environment_params)

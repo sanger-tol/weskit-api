@@ -1,0 +1,57 @@
+lsf_submission_host:
+  type: dict
+  required: true
+  schema:
+    ssh:
+      type: dict
+      required: true
+      schema:
+        username:
+          type: string
+          required: true
+        hostname:
+          type: string
+          required: true
+        port:
+          type: integer
+          required: true
+        knownhosts_file:
+          type: string
+          required: true
+        keyfile:
+          type: string
+          required: true
+        keyfile_passphrase:
+          type: string
+          required: false
+          nullable: true
+    bsub_params:
+      type: dict
+      required: false
+      schema:
+        job_name:
+          type: string
+          required: false
+          nullable: true
+        accounting_name:
+          type: string
+          required: false
+          nullable: true
+        group:
+          type: string
+          required: false
+          nullable: true
+        walltime:
+          type: string
+          required: false
+          nullable: true
+        total_memory:
+          type: integer
+          required: false
+        queue:
+          type: string
+          required: true
+        cores:
+          type: string
+          required: false
+          nullable: true

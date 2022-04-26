@@ -161,6 +161,21 @@ class SshExecutor(Executor):
                 print(export, file=file)
             return PurePath(file.name)
 
+    async def _create_nfl_work_dir(self, nf_work: PathLike, workdir: PathLike):
+        """
+        Creating a separate Nextflow working directory using the path available on NXF_WORK, once the path
+        is created it will be symlink to the Nextflow working directory
+
+        :param environment:
+        :param workdir:
+        :return:
+        """
+        run_command = f"set -ue; umask 0077; mkdir -p {shlex.quote(nf_work)}; \
+            mkdir -p {shlex.quote(str(workdir))}; \
+            ln -s {shlex.quote(nf_work)} {shlex.quote(str(workdir))}"
+        print(f"Executing creation of NXF_WORK from command: {run_command}")
+        await self._connection.run(run_command, check=True)
+
     async def _upload_setup_script(self, process_id: uuid.UUID, command: ShellCommand):
         """
         SSH usually does not allow to set environment variables. Therefore, we create a little
@@ -175,7 +190,7 @@ class SshExecutor(Executor):
         local_script_file = await self._create_setup_script(command)
         try:
             remote_dir = self._process_directory(process_id)
-            await self._connection.\
+            await self._connection. \
                 run(f"set -ue; umask 0077; mkdir -p {shlex.quote(str(remote_dir))}", check=True)
 
             # We use run() rather than sftp, because sftp is not turned on all SSH servers.
@@ -267,7 +282,7 @@ class SshExecutor(Executor):
 
             final_command_str = " ".join(effective_command)
             logger.debug(f"Executed command ({process_id}): {effective_command}")
-            process: SSHClientProcess = await self._connection.\
+            process: SSHClientProcess = await self._connection. \
                 create_process(command=final_command_str,
                                stdin=PIPE if stdin_file is None else stdin_file,
                                stdout=PIPE if stdout_file is None else stdout_file,
