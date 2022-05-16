@@ -161,7 +161,7 @@ class SshExecutor(Executor):
                 print(export, file=file)
             return PurePath(file.name)
 
-    async def _create_nfl_work_dir(self, environment: Dict[str, str], workdir: PathLike):
+    async def _create_nfl_work_dir(self, nf_work: PathLike, workdir: PathLike):
         """
         Creating a separate Nextflow working directory using the path available on NXF_WORK, once the path
         is created it will be symlink to the Nextflow working directory
@@ -170,9 +170,9 @@ class SshExecutor(Executor):
         :param workdir:
         :return:
         """
-        run_command = f"set -ue; umask 0077; mkdir -p {shlex.quote(str(environment.get('NXF_WORK')))}; \
+        run_command = f"set -ue; umask 0077; mkdir -p {shlex.quote(nf_work)}; \
             mkdir -p {shlex.quote(str(workdir))}; \
-            ln -s {shlex.quote(str(environment.get('NXF_WORK')))} {shlex.quote(str(workdir))}"
+            ln -s {shlex.quote(nf_work)} {shlex.quote(str(workdir))}"
         print(f"Executing creation of NXF_WORK from command: {run_command}")
         await self._connection.run(run_command, check=True)
 

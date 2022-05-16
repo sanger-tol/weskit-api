@@ -158,7 +158,10 @@ class Snakemake(WorkflowEngine):
         return KNOWN_PARAMS.subset(frozenset({"cores"}))
 
     def _environment(self, parameters: List[ActualEngineParameter]) -> Dict[str, str]:
-        return {}
+        result = {"SINGULARITYENV_PREPEND_PATH": "/software/treeoflife/miniconda3/envs/nf-core_dev/bin",
+                  "SINGULARITY_BIND": "/software",
+                  "SINGULARITYENV_JAVA_HOME": "/software/treeoflife/miniconda3/envs/nf-core_dev"}
+        return result
 
     def _command_params(self, parameters: List[ActualEngineParameter]) -> List[str]:
         result = []

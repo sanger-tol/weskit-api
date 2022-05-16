@@ -7,7 +7,7 @@
 #  Authors: The WESkit Team
 import logging
 import re
-import asyncssh
+from asyncssh import Error, ChannelOpenError
 from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
 from datetime import datetime
@@ -16,12 +16,14 @@ from pathlib import PurePath
 from tempfile import NamedTemporaryFile
 from typing import Optional, List, Tuple, Iterator, IO, Match, cast
 
-from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception, retry_if_exception_type
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception,\
+    retry_if_exception_type
 
 from weskit.classes.ShellCommand import ShellCommand
 from weskit.classes.executor.Executor import \
     Executor, ExecutedProcess, ExecutionStatus, CommandResult, ExecutionSettings, FileRepr
 from weskit.classes.executor.ExecutorException import ExecutorException, ExecutionError
+from weskit.classes.executor.SshExecutor import SshExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -247,9 +249,9 @@ class ClusterExecutor(Executor):
             process.result.end_time = datetime.now()
         return process
 
-    @retry(wait=wait_exponential(multiplier=1, min=1, max=6),
+    @retry(wait=wait_exponential(multiplier=1, min=4, max=30),
            stop=stop_after_attempt(5),
-           retry=retry_if_exception_type(asyncssh.ChannelOpenError))
+           retry=retry_if_exception_type(ChannelOpenError))
     def wait_for(self, process: ExecutedProcess) -> CommandResult:
         if process.result.status.finished:
             return process.result
@@ -267,13 +269,14 @@ class ClusterExecutor(Executor):
                     raise ExecutorException(f"Wait failed: {str(result)}, " +
                                             f"stderr={stdout.readlines()}, " +
                                             f"stdout={stdout.readlines()}")
-        except asyncssh.Error as e:
+        except Error as e:
             logger.debug(e.reason)
-            if e.reason in ["SSH connection closed", "SSH connection lost"]:
+            if isinstance(self._executor, SshExecutor) and \
+                    e.reason in ["SSH connection closed", "SSH connection lost"]:
                 logger.info("Reconnecting to the remote server")
-                # Creating a new connection
+                # Establishing a new remote connection
                 self._executor._connect()
-                raise asyncssh.ChannelOpenError(code=e.code, reason=e.reason)
+                raise ChannelOpenError(code=e.code, reason=e.reason)
         return self.update_process(process).result
 
     @abstractmethod

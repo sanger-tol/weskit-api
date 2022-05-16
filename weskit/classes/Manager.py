@@ -261,9 +261,9 @@ class Manager:
 
         # workflow_path_rel is always relative to the run_dir, even when referring to a centrally
         # installed workflow.
-        workflow_path_abs = os.path.join(self.data_dir, run_dir, workflow_path_rel)
-        if not os.path.exists(workflow_path_abs) and workflow_url.scheme != '':
-            raise ClientError("Derived workflow path is not accessible: '%s'" % workflow_path_abs)
+        # workflow_path_abs = os.path.join(self.data_dir, run_dir, workflow_path_rel)
+        # if not os.path.exists(workflow_path_abs) and workflow_url.scheme != '':
+        #     raise ClientError("Derived workflow path is not accessible: '%s'" % workflow_path_abs)
 
         return workflow_path_rel
 
