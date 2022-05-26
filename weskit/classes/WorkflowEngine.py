@@ -44,6 +44,7 @@ class WorkflowEngine(metaclass=ABCMeta):
         Helper for parameter processing. This is for flag-like parameters. The boolean value is
         interpreted as presence (True) or absence (False) of the flag.
         """
+
         def to_bool(value: Optional[str]) -> bool:
             if value is None:
                 return False
@@ -158,9 +159,9 @@ class Snakemake(WorkflowEngine):
         return KNOWN_PARAMS.subset(frozenset({"cores"}))
 
     def _environment(self, parameters: List[ActualEngineParameter]) -> Dict[str, str]:
-        result = {"SINGULARITYENV_PREPEND_PATH": "/software/treeoflife/miniconda3/envs/nf-core_dev/bin",
-                  "SINGULARITY_BIND": "/software",
-                  "SINGULARITYENV_JAVA_HOME": "/software/treeoflife/miniconda3/envs/nf-core_dev"}
+        result = {"TOWER_ACCESS_TOKEN": getenv("TOWER_ACCESS_TOKEN"),
+                  "TMP_DIR": getenv("NFL_TMP")
+                  }
         return result
 
     def _command_params(self, parameters: List[ActualEngineParameter]) -> List[str]:
@@ -256,9 +257,9 @@ class Nextflow(WorkflowEngine):
                 engine_params: Dict[str, Optional[str]]) \
             -> ShellCommand:
         parameters = self._effective_run_params(engine_params)
-        command = ["nextflow"] +\
-            self._command_params(parameters) +\
-            ["run", str(workflow_path)]
+        command = ["nextflow"] + \
+                  self._command_params(parameters) + \
+                  ["run", str(workflow_path)]
         if len(config_files) == 1:
             command += ["-params-file", str(config_files[0])]
         else:
