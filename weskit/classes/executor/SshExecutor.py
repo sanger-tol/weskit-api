@@ -170,6 +170,21 @@ class SshExecutor(Executor):
                 print(export, file=file)
             return PurePath(file.name)
 
+    async def _create_nfl_work_dir(self, nf_work: PathLike, workdir: PathLike):
+        """
+        Creating a separate Nextflow working directory using the path available on NXF_WORK, once the path
+        is created it will be symlink to the Nextflow working directory
+
+        :param environment:
+        :param workdir:
+        :return:
+        """
+        run_command = f"set -ue; umask 0077; mkdir -p {shlex.quote(nf_work)}; \
+            mkdir -p {shlex.quote(str(workdir))}; \
+            ln -s {shlex.quote(nf_work)} {shlex.quote(str(workdir))}"
+        print(f"Executing creation of NXF_WORK from command: {run_command}")
+        await self._connection.run(run_command, check=True)
+
     async def _upload_setup_script(self, process_id: uuid.UUID, command: ShellCommand):
         """
         SSH usually does not allow to set environment variables. Therefore, we create a little

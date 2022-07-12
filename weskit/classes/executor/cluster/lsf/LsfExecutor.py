@@ -81,6 +81,11 @@ class LsfExecutor(ClusterExecutor):
                 implementation uses `bsub -env` and too many variables may result in a too long
                 command-line.
         """
+        nf_work = command.environment.get('NXF_WORK')
+        # Create NFL work directory and symlink to work directory
+        if nf_work:
+            self.executor._event_loop.run_until_complete(
+                self.executor._create_nfl_work_dir(nf_work, command.workdir))
 
         if stdin_file is not None:
             logger.error("stdin_file is not supported in ClusterExecutor.execute()")

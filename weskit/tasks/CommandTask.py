@@ -115,7 +115,7 @@ def run_command(command: List[str],
     # The command context is the context needed by the command, which may be locally or remotely
     # dependent on the executor type.
     command_context: PathContext
-    if executor_type.executes_engine_remotely:
+    if executor_type.executes_engine_remotely and executor_parameters.get("remote_base_dir", None):
         command_context = worker_context.relocate(Path(executor_parameters["remote_base_dir"]))
         logger.info("Running command in {} (worker)/{} (command): {}".
                     format(worker_context.run_dir, command_context.run_dir, command))

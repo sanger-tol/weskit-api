@@ -97,6 +97,7 @@ KNOWN_PARAMS = ParameterIndex([
     EngineParameter({"graph"}),
     EngineParameter({"job-name"}),
     EngineParameter({"max-memory"}),
+    EngineParameter({"jobs"}),
     EngineParameter({"cores"}),
     EngineParameter({"accounting-name"}),
     EngineParameter({"group"}),
@@ -104,7 +105,12 @@ KNOWN_PARAMS = ParameterIndex([
     EngineParameter({"max-runtime"}),
     EngineParameter({"use-singularity"}),
     EngineParameter({"use-conda"}),
-    EngineParameter({"profile"})
+    EngineParameter({"r"}),
+    EngineParameter({"profile"}),
+    EngineParameter({"c"}),
+    EngineParameter({"w"}),
+    EngineParameter({"resume"}),
+    EngineParameter({"with-tower"}),
 ])
 
 

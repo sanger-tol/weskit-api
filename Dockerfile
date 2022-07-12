@@ -19,10 +19,10 @@ ARG NO_PROXY=""
 ARG no_proxy="$NO_PROXY"
 
 # Use (likely) unused user and group IDs by default.
-ARG USER=weskit
-ARG GROUP=weskit
-ARG USER_ID="35671"
-ARG GROUP_ID="35671"
+ARG USER=ubuntu
+ARG GROUP=ubuntu
+ARG USER_ID="1000"
+ARG GROUP_ID="1000"
 
 RUN groupadd -r "$GROUP" -g "$GROUP_ID" && \
 	useradd -r -s /bin/false -m -d /home/weskit -g "$GROUP" -u "$USER_ID" "$USER"

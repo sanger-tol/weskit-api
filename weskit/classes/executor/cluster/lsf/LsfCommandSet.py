@@ -32,7 +32,7 @@ class LsfCommandSet(CommandSet):
 
         # We want jobs to exit, if the chosen remote workdir does not exist. No explicit "none"
         # is necessary because it is implicit, if there is at least as single variable set.
-        environment_string = "LSB_EXIT_IF_CWD_NOTEXIST=Y"
+        environment_string = "all,LSB_EXIT_IF_CWD_NOTEXIST=Y"
         if len(environment) > 0:
             # Note: The space after the comma is needed.
             environment_string += ", " + ", ".join(
@@ -65,7 +65,7 @@ class LsfCommandSet(CommandSet):
         unit specification 'K' for this. Smaller values are rounded up, because the string is used
         for reserving memory and its fine to reserve more.
         """
-        return f"{math.ceil(memory.to(Unit.KILO, decimal_multiples=False).value)}K"
+        return f"{math.ceil(memory.to(Unit.MEGA, decimal_multiples=False).value)}"
 
     def _walltime_string(self, walltime: timedelta) -> str:
         """
@@ -110,8 +110,9 @@ class LsfCommandSet(CommandSet):
                 if settings.accounting_name is not None else []
 
             result += [
-                "-M", self._memory_string(settings.memory),
-                "-R", f"rusage[mem={self._memory_string(settings.memory)}]"] \
+                "-M", f"{self._memory_string(settings.memory)}",
+                "-R", f"select[mem>{self._memory_string(settings.memory)}] "
+                      f"rusage[mem={self._memory_string(settings.memory)}]"] \
                 if settings.memory is not None else []
 
             result += ["-W", self._walltime_string(settings.walltime)] \

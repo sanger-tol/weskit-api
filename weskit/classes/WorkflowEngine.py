@@ -7,8 +7,8 @@
 #  Authors: The WESkit Team
 import math
 from abc import ABCMeta, abstractmethod
-from os import PathLike
-from pathlib import Path
+from os import PathLike, getenv
+from pathlib import Path, PurePath
 from typing import List, Dict, Optional
 
 from tempora import parse_timedelta
@@ -32,6 +32,9 @@ class WorkflowEngine(metaclass=ABCMeta):
             raise ValueError(f"Non-allowed default parameters for {type(self).name()}: " +
                              str(not_allowed))
         self.default_params = default_params
+        with open(getenv("TOWER_ACCESS_TOKEN")) as f:
+            self.tower_access_token = f.read()
+
 
     @classmethod
     @abstractmethod
@@ -44,10 +47,17 @@ class WorkflowEngine(metaclass=ABCMeta):
         return KNOWN_PARAMS.subset(frozenset({"job-name",
                                               "max-memory",
                                               "max-runtime",
-                                              "cores",
+                                              "jobs",
                                               "group",
                                               "queue",
-                                              "accounting-name"}))
+                                              "accounting-name",
+                                              "profile",
+                                              "w",
+                                              "r",
+                                              "c",
+                                              "resume",
+                                              "with-tower",
+                                              }))
 
     def _optional_param(self,
                         param: ActualEngineParameter,
@@ -88,6 +98,11 @@ class WorkflowEngine(metaclass=ABCMeta):
         if param.param == self.known_parameters()[name]:
             if param.value is None:
                 return []
+            elif isinstance(param.value, list):
+                result = []
+                for v in param.value:
+                    result.extend([argument, v])
+                return result
             else:
                 return [argument, str(param.value)]
         else:
@@ -192,7 +207,9 @@ class Snakemake(WorkflowEngine):
                                           known_parameters().all]))
 
     def _environment(self, parameters: List[ActualEngineParameter]) -> Dict[str, str]:
-        return {}
+        return {"TOWER_ACCESS_TOKEN": self.tower_access_token,
+                "TMP_DIR": getenv("NFL_TMP")
+                }
 
     def _command_params(self, parameters: List[ActualEngineParameter]) -> List[str]:
         result = []
@@ -242,7 +259,7 @@ class Nextflow(WorkflowEngine):
                                           known_parameters().all]))
 
     def _environment(self, parameters: List[ActualEngineParameter]) -> Dict[str, str]:
-        result = {}
+        result = {"TOWER_ACCESS_TOKEN": self.tower_access_token}
         for param in parameters:
             if param.param == self.known_parameters()["max-memory"]:
                 if param.value is None:
@@ -271,23 +288,36 @@ class Nextflow(WorkflowEngine):
             result += self._optional_param(param, "report", "-with-report")
             result += self._optional_param(param, "timeline", "-with-timeline")
             result += self._optional_param(param, "graph", "-with-dag")
+            result += self._argument_param(param, "r", "-r")
+            result += self._argument_param(param, "c", "-c")
+            result += self._argument_param(param, "w", "-w")
+            result += self._argument_param(param, "profile", "-profile")
+            result += self._optional_param(param, "resume", "-resume")
+            result += self._argument_param(param, "with-tower", "-with-tower")
         return result
 
     def command(self,
                 workflow_path: PathLike,
                 workdir: Optional[PathLike],
                 config_files: List[PathLike],
-                engine_params: Dict[str, Optional[str]])\
+                engine_params: Dict[str, Optional[str]]) \
             -> ShellCommand:
         parameters = self._effective_run_params(engine_params)
-        command = ["nextflow"] +\
-            self._command_params(parameters) +\
-            ["run", str(workflow_path)]
+        command = ["nextflow"] + \
+                  self._command_params(parameters) + \
+                  ["run", str(workflow_path)]
         if len(config_files) == 1:
             command += ["-params-file", str(config_files[0])]
         else:
             raise ValueError("Nextflow accepts only a single parameters file (`-params-file`)")
         command += self._run_command_params(parameters)
+        environment_params = self._environment(parameters)
+        # As multiple Nextflow workflows will be accessing the $user/.nextflow/assets folder
+        # making NXF_ASSETS point to current workdir is safer to avoid GIT index errors.
+        environment_params["NXF_ASSETS"] = str(workdir)
+        run_dir = PurePath(workdir)
+        environment_params["NXF_WORK"] = str(Path(getenv("NFL_TMP")) / run_dir.parent.name
+                                             / run_dir.name / Path("work"))
         return ShellCommand(command=command,
                             workdir=None if workdir is None else Path(workdir),
-                            environment=self._environment(parameters))
+                            environment=environment_params)
