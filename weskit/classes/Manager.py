@@ -313,10 +313,10 @@ class Manager:
             raise self._record_error(run, ex, RunStatus.SYSTEM_ERROR)
 
         # Prepare run directory
-        if self.require_workdir_tag:
-            run.dir = run.request["tags"]["run_dir"]
-        else:
-            run.dir = os.path.join(run.id[0:4], run.id)
+        run.dir = os.path.join(run.id[0:4], run.id)
+        if self.require_workdir_tag and run.request.get("tags", None):
+            if run.request["tags"].get("run_dir", None):
+                run.dir = run.request["tags"]["run_dir"]
 
         try:
             run_dir_abs = os.path.abspath(os.path.join(self.data_dir, run.dir))

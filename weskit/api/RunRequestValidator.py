@@ -57,8 +57,8 @@ class RunRequestValidator(object):
             normalized_data = syntax_validation_result
 
         wtnv_errors = self._validate_workflow_type_and_version(
-            normalized_data.get("workflow_type", None),           # not optional by standard
-            normalized_data.get("workflow_type_version", None))   # not optional by standard
+            normalized_data.get("workflow_type", None),  # not optional by standard
+            normalized_data.get("workflow_type_version", None))  # not optional by standard
         url_errors = apply_if_not_none(normalized_data.get("workflow_url", None),
                                        self._validate_workflow_url)
         workdir_tag_errors = self._validate_rundir_tag(
@@ -166,7 +166,7 @@ class RunRequestValidator(object):
         try:
             if self.require_rundir_tag:
                 if tags is None:
-                    return ["'run_dir' tag is required but tags field is missing"]
+                    return []  # ["'run_dir' tag is required but tags field is missing"]
                 tags = json.loads(tags)
                 if "run_dir" not in tags.keys():
                     return ["'run_dir' tag is required and missing"]
